@@ -135,6 +135,11 @@ public:
     void rcReadWrite();//反控设备的数据读写信号控制
     void exportData(int curPage);
 
+    void updateLocalDevice();
+    void updateLocalFactors();
+    void matchparams();
+    void synDataEvent();
+
 private slots:
 
     void refresh_AnalogDevParam();//更新模拟量参数1

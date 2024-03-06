@@ -7,6 +7,8 @@ QJsonObject g_Dcm_Factor;
 QJsonArray g_Dcm_SystemCode;
 QJsonObject g_Dcm_SupportDevice;
 QJsonObject g_ConfObjDevParam;
+QJsonObject g_Dcm_Devices;
+QJsonObject g_Dcm_Factors;
 QString g_Device_ID;
 QString g_Device_Type;
 bool g_IsAnalogDevOperated = false;
@@ -555,7 +557,7 @@ void MainWindow::Widget_Init()
     headerfont.setPointSize(16);
 
     itemfont.setBold(true);
-    itemfont.setPointSize(20);
+    itemfont.setPointSize(16);
 
     ckfont.setBold(true);
     ckfont.setPointSize(18);
@@ -615,6 +617,9 @@ void MainWindow::Widget_Init()
     ui->stackedWidget->setCurrentIndex(0);
     ui->tableWidget->verticalScrollBar()->setStyleSheet("QScrollBar{background-color:rgb(218,222,223); width:10px;}""QScrollBar::handle{background-color:rgb(180, 180, 180); border:2px solid transparent; border-radius:5px;}""QScrollBar::handle:hover{background-color:rgb(139, 139, 139);}""QScrollBar::sub-line{background:transparent;}""QScrollBar::add-line{background:transparent;}"); //设置纵向滚动条样式
     ui->tableWidget->horizontalScrollBar()->setStyleSheet("QScrollBar{background-color:rgb(218,222,223); height:10px;}""QScrollBar::handle{background-color:rgb(180, 180, 180); border:2px solid transparent; border-radius:5px;}""QScrollBar::handle:hover{background-color:rgb(139, 139, 139);}""QScrollBar::sub-line{background:transparent;}""QScrollBar::add-line{background:transparent;}");  //设置横向滚动条样式
+
+
+    synDataEvent();
 
 
     connect(ui->closewindow,&QPushButton::clicked,this,[=]()
@@ -762,7 +767,13 @@ void MainWindow::Widget_Init()
 //        sd->show();
 //    });
 
-
+    ui->comFrame->hide();
+    ui->pushButton_Teshuzhi->hide();
+    ui->pushButton_devicecmdctrl->hide();
+    ui->label_71->hide();
+    ui->label_30->hide();
+    ui->label_70->hide();
+    ui->label_9->hide();
 
 }
 
@@ -2001,14 +2012,318 @@ void MainWindow::handleResults(QString item,const QJsonObject &results)
     {
 //        usbUpdateEvent();
     }
-    else if(item == "rccom_state")
-    {
-//        emit sendlog("rccom_state");
-        checkRCCOMSTate(avaPortStateMap,results);
-        addRCPorts();
-        rcReadWrite();
+//    else if(item == "deviceinfo")
+//    {
+//        updateLocalDevice(results);
+//    }
+//    else if(item == "factorinfo")
+//    {
+//        updateLocalFactors(results);
+//    }
+//    else if(item == "matchparams")
+//    {
+//        matchparams();
+//    }
 
+//    else if(item == "rccom_state")
+//    {
+////        emit sendlog("rccom_state");
+//        checkRCCOMSTate(avaPortStateMap,results);
+//        addRCPorts();
+//        rcReadWrite();
+
+//    }
+}
+
+void MainWindow::updateLocalDevice()
+{
+    httpclinet pClient;
+    QJsonObject obj;
+    if(!pClient.get(DCM_DEVICE,obj))
+    {
+        return;
     }
+
+    qDebug()<<__LINE__<<__FUNCTION__<<obj<<endl;
+    QJsonObject::iterator it = obj.begin();
+    QJsonObject::iterator it_end = obj.end();
+    QString filepath = "/home/rpdzkj/tmpFiles";
+    QDir dir(filepath);
+    if(!dir.exists())
+    {
+       dir.mkdir(filepath);
+    }
+
+    while(it != it_end)
+    {
+        QString decidecode = it.key();
+        if(!decidecode.isEmpty())
+        {
+            QString filename = filepath + "/" +decidecode+".json";
+            qDebug()<<__LINE__<<"file device:"<<filename<<endl;
+            QFile file(filename);
+            if(file.open(QIODevice::ReadOnly|QIODevice::Text))
+            {
+                qDebug()<<__LINE__<<endl;
+                QByteArray byt = file.readAll();
+                file.flush();
+                QJsonDocument jDoc = QJsonDocument::fromJson(byt);
+                QJsonObject jRefDevices = jDoc.object();
+                file.close();
+                byt.clear();
+                QJsonObject jNewDevice = jRefDevices;
+                if(jNewDevice.contains("device"))
+                {
+                    jNewDevice.remove("device");
+                }
+
+                jNewDevice.insert("device",it.value().toObject());
+
+                QFile fileW(filename);
+                QJsonDocument jDocW;
+                jDocW.setObject(jNewDevice);
+                fileW.open(QIODevice::WriteOnly|QIODevice::Text|QIODevice::Truncate);
+                fileW.write(jDocW.toJson());
+                fileW.close();
+            }
+            else
+            {
+                QFile fileW(filename);
+                QJsonDocument jDocW;
+                fileW.open(QIODevice::WriteOnly|QIODevice::Text|QIODevice::Append);
+                fileW.write(jDocW.toJson());
+                fileW.close();
+            }
+        }
+
+        it++;
+    }
+}
+
+void MainWindow::updateLocalFactors()
+{
+    httpclinet pClient;
+    QJsonObject obj;
+    if(!pClient.get(DCM_DEVICE,obj))
+    {
+        return;
+    }
+    qDebug()<<__LINE__<<__FUNCTION__<<obj<<endl;
+    QJsonObject tmpObj = obj;
+    QJsonObject::iterator it0 = tmpObj.begin();
+    QJsonObject::iterator it0_end = tmpObj.end();
+    QJsonObject::iterator it = tmpObj.begin();
+    QJsonObject::iterator it_end = tmpObj.end();
+    QString filepath = "/home/rpdzkj/tmpFiles";
+    QDir dir(filepath);
+    if(!dir.exists())
+    {
+       dir.mkdir(filepath);
+    }
+    QJsonObject newObj;
+    while(it0 != it0_end)
+    {
+        newObj.insert(it0.key(),it0.value().toObject());
+        it0++;
+    }
+    qDebug()<<__LINE__<<__FUNCTION__<<newObj<<endl;
+    while(it != it_end)
+    {
+        qDebug()<<__LINE__<<it.key()<<endl;
+        QJsonObject refObj = it.value().toObject();
+
+        QString decidecode = refObj.value("device_id").toString();
+        qDebug()<<__LINE__<<decidecode<<endl;
+        if(!decidecode.isEmpty())
+        {
+            QString filename = filepath + "/" +decidecode+".json";
+            qDebug()<<__LINE__<<"file factors:"<<filename<<endl;
+            QFile file(filename);
+            if(file.open(QIODevice::ReadOnly|QIODevice::Text))
+            {
+                QByteArray byt = file.readAll();
+                file.flush();
+                QJsonDocument jDoc = QJsonDocument::fromJson(byt);
+                QJsonObject jRefDevices = jDoc.object();
+                file.close();
+                byt.clear();
+                QJsonObject jNewDevice = jRefDevices;
+                if(jNewDevice.contains("factors"))
+                {
+                    jNewDevice.remove("factors");
+                }
+
+                jNewDevice.insert("factors",newObj);
+                qDebug()<<__LINE__<<__FUNCTION__<<newObj<<endl;
+                QFile fileW(filename);
+                QJsonDocument jDocW;
+                jDocW.setObject(jNewDevice);
+                fileW.open(QIODevice::WriteOnly|QIODevice::Text|QIODevice::Truncate);
+                fileW.write(jDocW.toJson());
+                fileW.close();
+            }
+
+        }
+        it++;
+    }
+}
+
+void MainWindow::matchparams()
+{
+    httpclinet pHttpCLient;
+    QJsonObject devicesObj;
+    if(!pHttpCLient.get(DCM_DEVICE,devicesObj))
+    {
+        return;
+    }
+
+    QJsonObject::iterator it = devicesObj.begin();
+    QJsonObject::iterator it_end = devicesObj.end();
+    QString filepath = "/home/rpdzkj/tmpFiles";
+    while(it!=it_end)
+    {
+        QString dev_id = it.key();
+        QJsonObject dev_obj = it.value().toObject();
+        QString dev_params = dev_obj.value("dev_params").toString();
+        QString filename = filepath + "/" +dev_id+".json";
+        QFile file(filename);
+        if(!file.open(QIODevice::ReadOnly|QIODevice::Text))
+        {
+            return;
+        }
+
+        QByteArray byt = file.readAll();
+        file.flush();
+        file.close();
+        QJsonDocument jDocR = QJsonDocument::fromJson(byt);
+        QJsonObject jObj = jDocR.object();
+        byt.clear();
+        if(!jObj.contains("factors"))
+        {
+            return;
+        }
+
+        QJsonObject jFactors = jObj.value("factors").toObject();
+
+        if(dev_params.split(",").count()==0)
+            return;
+        QStringList facParams = dev_params.split(",");
+
+        for(QString facParam:facParams)
+        {
+            qDebug()<<__LINE__<<facParam<<endl;
+            if(facParam.split("=").count()<2)
+                return;
+
+            QString key = facParam.split("=")[0];
+            QString value = facParam.split("=")[1];
+            if(key.split("_").count()<3)
+                return;
+            QString paramName = key.split("_")[0]+"_"+key.split("_")[1];
+            QString paramNote = key.split("_")[2];
+            int index= paramNote.toInt();
+
+            for(int i = 0;i<jFactors.count();++i)
+            {
+                if(i+1 == index)
+                {
+                    QString keyName = jFactors.keys()[i];
+                    QJsonObject keyValue = jFactors.value(keyName).toObject();
+
+                    if(key.contains("analog_max"))
+                    {
+
+                        double v = value.toDouble();
+                        if(keyValue.contains(CONF_ANALOG_PARAM_AU1))
+                        {
+                            keyValue.remove(CONF_ANALOG_PARAM_AU1);
+                        }
+                        keyValue.insert(CONF_ANALOG_PARAM_AU1,v);
+                    }
+                    else if(key.contains("analog_min"))
+                    {
+                        double v = value.toDouble();
+                        if(keyValue.contains(CONF_ANALOG_PARAM_AD1))
+                        {
+                            keyValue.remove(CONF_ANALOG_PARAM_AD1);
+                        }
+                        keyValue.insert(CONF_ANALOG_PARAM_AD1,v);
+                    }
+                    else if(key.contains("upper_limit"))
+                    {
+                        double v = value.toDouble();
+                        if(keyValue.contains(CONF_ANALOG_PARAM_AU2))
+                        {
+                            keyValue.remove(CONF_ANALOG_PARAM_AU2);
+                        }
+                        keyValue.insert(CONF_ANALOG_PARAM_AU2,v);
+                    }
+                    else if(key.contains("lower_limit"))
+                    {
+                        double v = value.toDouble();
+                        if(keyValue.contains(CONF_ANALOG_PARAM_AD2))
+                        {
+                            keyValue.remove(CONF_ANALOG_PARAM_AD2);
+                        }
+                        keyValue.insert(CONF_ANALOG_PARAM_AD2,v);
+                    }
+
+                    if(keyValue.contains(CONF_IS_ANALOG_PARAM))
+                    {
+                        keyValue.remove(CONF_IS_ANALOG_PARAM);
+                    }
+
+                        keyValue.insert(CONF_IS_ANALOG_PARAM,true);
+
+                     if(keyValue.contains(CONF_IS_DEVICE_PROPERTY))
+                     {
+                         keyValue.remove(CONF_IS_DEVICE_PROPERTY);
+                     }
+
+                     keyValue.insert(CONF_IS_DEVICE_PROPERTY,false);
+
+                     qDebug()<<__LINE__<<keyName<<keyValue<<endl;
+
+                     jFactors.remove(keyName);
+                     jFactors.insert(keyName,keyValue);
+
+                     QJsonObject pReply;
+
+                     if(pHttpCLient.put(DCM_DEVICE_FACTOR,keyValue,pReply))
+                     {
+                         qDebug()<<__LINE__<<"SUCCESS"<<endl;
+                     }
+                     else
+                     {
+                         qDebug()<<__LINE__<<pReply<<endl;
+                     }
+                }
+            }
+        }
+
+        jObj.remove("factors");
+        jObj.insert("factors",jFactors);
+
+        QJsonDocument jDocW;
+        jDocW.setObject(jObj);
+        QFile fileW(filename);
+        fileW.open(QIODevice::WriteOnly|QIODevice::Text|QIODevice::Truncate);
+        fileW.write(jDocW.toJson());
+        fileW.flush();
+        fileW.close();
+
+
+
+
+        it++;
+    }
+}
+
+void MainWindow::synDataEvent()
+{
+    updateLocalDevice();
+    updateLocalFactors();
+    matchparams();
 }
 
 void MainWindow::rcReadWrite()
@@ -2332,6 +2647,8 @@ void CHttpWork::doWork1() {
     bool pDcmDactorFlag = false;
     bool pDcmSystemCodeFlag = false;
     bool pDcmSupportDeviceFlag = false;
+    bool pDcmDeviceFlag = false;
+    bool pDcmFactorFlag = false;
 
     /* 标志位为真 */
     isCanRun = true;
@@ -2375,6 +2692,20 @@ void CHttpWork::doWork1() {
                 pDcmSupportDeviceFlag = true;
             }
         }
+//        if(!pDcmDeviceFlag)
+//        {
+//            if(pClient.get(DCM_DEVICE,g_Dcm_Devices))
+//            {
+//                pDcmDeviceFlag = true;
+//            }
+//        }
+//        if(!pDcmFactorFlag)
+//        {
+//            if(pClient.get(DCM_DEVICE_FACTOR,g_Dcm_Factors))
+//            {
+//                pDcmFactorFlag = true;
+//            }
+//        }
 
         QJsonObject pJsonObj;
         emit resultReady("usb_stat",pJsonObj);
@@ -2389,26 +2720,39 @@ void CHttpWork::doWork1() {
             QThread::sleep(3);
         }
 
-        QString cmdinfofile = QApplication::applicationDirPath() + CMDINFO;
-        QFile fileR(cmdinfofile);
-        QJsonDocument jDocR;
-        if(fileR.open(QIODevice::ReadOnly|QIODevice::Text))
-        {
-            QByteArray byt;
-            byt.append(fileR.readAll());
-            fileR.flush();
-            fileR.close();
+//        if(pClient.get(DCM_DEVICE,pJsonObj))
+//        {
+//            emit resultReady("deviceinfo",pJsonObj);
+//        }
 
-            jDocR = QJsonDocument::fromJson(byt);
-            QJsonObject jtmpObj = jDocR.object();
-            byt.clear();
+//        if(pClient.get(DCM_DEVICE_FACTOR,pJsonObj))
+//        {
+//            emit resultReady("factorinfo",pJsonObj);
+//        }
 
-            if(jtmpObj.count()>0)
-            {
-                emit resultReady("rccom_state",jtmpObj);
-                QThread::sleep(3);
-            }
-        }
+//        emit resultReady("matchparams",QJsonObject());
+
+
+//        QString cmdinfofile = QApplication::applicationDirPath() + CMDINFO;
+//        QFile fileR(cmdinfofile);
+//        QJsonDocument jDocR;
+//        if(fileR.open(QIODevice::ReadOnly|QIODevice::Text))
+//        {
+//            QByteArray byt;
+//            byt.append(fileR.readAll());
+//            fileR.flush();
+//            fileR.close();
+
+//            jDocR = QJsonDocument::fromJson(byt);
+//            QJsonObject jtmpObj = jDocR.object();
+//            byt.clear();
+
+//            if(jtmpObj.count()>0)
+//            {
+//                emit resultReady("rccom_state",jtmpObj);
+//                QThread::sleep(3);
+//            }
+//        }
 
 
     }
@@ -2484,7 +2828,7 @@ ui->tableWidget_Factor->horizontalHeader()->setFont(font);
 
 ui->tableWidget_Factor->setFont(QFont(QLatin1String("Ubuntu"), 20,75)); // 表格内容的字体为10号宋体
 
-int widths[] = {200, 200, 300};
+int widths[] = {300, 200, 300};
 for (int i = 0;i < cnt; ++ i){ //列编号从0开始
     ui->tableWidget_Factor->setColumnWidth(i, widths[i]);
 }
@@ -2567,7 +2911,7 @@ ui->tableWidget_Upload->horizontalHeader()->setFont(font);
 
 //ui->tableWidget_Upload->setFont(QFont(QLatin1String("song"), 16)); // 表格内容的字体为10号宋体
 
-int widths[] = {150, 250, 150, 230, 150, 200,120,150, 150, 180, 150, 130};
+int widths[] = {350, 350, 150, 230, 150, 200,120,150, 150, 180, 250, 130};
 for (int i = 0;i < cnt; ++ i){ //列编号从0开始
     ui->tableWidget_Upload->setColumnWidth(i, widths[i]);
 }
@@ -2582,6 +2926,7 @@ ui->tableWidget_Upload->setTextElideMode(Qt::ElideNone);
 bool MainWindow::DevGui_Init()
 {
 //    buildLocalJson();
+    synDataEvent();
     disconnect(m_SignalMapper_DevD,SIGNAL(mapped(QString)),this,SLOT(onButtonDevDele(QString)));
     disconnect(m_SignalMapper_DevF,SIGNAL(mapped(QString)),this,SLOT(onButtonDevFactor(QString)));
     disconnect(m_SignalMapper_DevM,SIGNAL(mapped(QString)),this,SLOT(onButtonDevMore(QString)));
@@ -2677,6 +3022,7 @@ bool MainWindow::DevGui_Init()
 void MainWindow::OpenDev_Setting()
 {
     ui->stackedWidget->setCurrentIndex(10);
+
     DevGui_Init();
 }
 
@@ -3498,31 +3844,45 @@ background:qlineargradient(spread:pad,x1:0,y1:0,x2:0,y2:1,stop:0 #646464,stop:1 
     hscollbar->setStyleSheet("QScrollBar:vertical { width: 30px; }");
     ui->tableWidget->setHorizontalScrollBar(hscollbar);
 
-//设置表头
-QStringList headerText;
-headerText << QStringLiteral("序号") << QStringLiteral("采集时间")
-           << QStringLiteral("因子编码") << QStringLiteral("实时值") <<  QStringLiteral("数据标识") ;
-int cnt = headerText.count();
-ui->tableWidget->setColumnCount(cnt);
-ui->tableWidget->setHorizontalHeaderLabels(headerText);
-ui->tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers); //禁止编辑
-ui->tableWidget->horizontalHeader()->setStretchLastSection(true); //行头自适应表格
+    ui->tableWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
-ui->tableWidget->horizontalHeader()->setFont(QFont(QLatin1String("song"), 16));
-ui->tableWidget->horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
-//QFont font =  ui->tableWidget->horizontalHeader()->font();
+    //设置表头
+    QStringList headerText;
+    headerText << QStringLiteral("序号") << QStringLiteral("采集时间")
+               << QStringLiteral("因子编码") << QStringLiteral("实时值") <<  QStringLiteral("数据标识") ;
+    int cnt = headerText.count();
+    ui->tableWidget->setColumnCount(cnt);
+    ui->tableWidget->setHorizontalHeaderLabels(headerText);
+    ui->tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers); //禁止编辑
+    ui->tableWidget->horizontalHeader()->setStretchLastSection(true); //行头自适应表格
 
-ui->tableWidget->setFont(QFont(QLatin1String("song"), 16)); // 表格内容的字体为10号宋体
+    ui->tableWidget->horizontalHeader()->setFont(QFont(QLatin1String("song"), 16));
+    ui->tableWidget->horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
+    //QFont font =  ui->tableWidget->horizontalHeader()->font();
 
-int widths[] = {100, 245,245,245,245};                  //1080
-for (int i = 0;i < cnt; i++ ){ //列编号从0开始
-    ui->tableWidget->setColumnWidth(i, widths[i]);
-}
+    ui->tableWidget->setFont(QFont(QLatin1String("song"), 14)); // 表格内容的字体为10号宋体
 
-ui->tableWidget->setRowHeight(0,22);
-ui->tableWidget->setStyleSheet(qssTV);
-ui->tableWidget->horizontalHeader()->setVisible(true);
-ui->tableWidget->verticalHeader()->setDefaultSectionSize(45);
+    int widths[] = {100, 260,280,245,245};                  //1080
+    for (int i = 0;i < cnt; i++){ //列编号从0开始
+        ui->tableWidget->setColumnWidth(i, widths[i]);
+    }
+
+    ui->tableWidget->setWordWrap(true);
+    for(int i=0;i<ui->tableWidget->rowCount();++i)
+    {
+        if(i==0)
+        {
+            ui->tableWidget->setRowHeight(i,22);
+        }
+        else
+        {
+            ui->tableWidget->setRowHeight(i,30);
+        }
+    }
+
+    ui->tableWidget->setStyleSheet(qssTV);
+    ui->tableWidget->horizontalHeader()->setVisible(true);
+    ui->tableWidget->verticalHeader()->setDefaultSectionSize(45);
 }
 
 //填充表格
@@ -3755,6 +4115,18 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
     ui->progressBar->setValue(100);
     usleep(5);
 
+    ui->tableWidget->horizontalHeader()->setStretchLastSection(false);
+    ui->tableWidget->verticalHeader()->setDefaultSectionSize(45);
+
+    QScrollBar *vscollbar = new QScrollBar(Qt::Vertical,ui->tableWidget);
+    vscollbar->setStyleSheet("QScrollBar:vertical { width: 30px; }");
+    ui->tableWidget->setVerticalScrollBar(vscollbar);
+
+    QScrollBar *hscollbar = new QScrollBar(Qt::Horizontal,ui->tableWidget);
+    hscollbar->setStyleSheet("QScrollBar:vertical { width: 30px; }");
+    ui->tableWidget->setHorizontalScrollBar(hscollbar);
+
+    ui->tableWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
     QString pExportType;
     if(ui->checkBox_2->isChecked())
@@ -3773,6 +4145,8 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
     {
         pExportType = "month";
     }
+
+    ui->tableWidget->setWordWrap(true);
 
 
     if(m_CurPage == 0) ui->pushButtonLast->setEnabled(false);
@@ -3837,10 +4211,11 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
     ui->tableWidget->setRowCount(2+pRowNum);
     ui->tableWidget->setColumnCount(2+pColNum*5);
     ui->tableWidget->clearContents();
-
+    ui->tableWidget->setTextElideMode(Qt::ElideNone);
     ui->tableWidget->setColumnWidth(0, 50); // xuhao
-    ui->tableWidget->setColumnWidth(1, 200); // timestamp
+    ui->tableWidget->setColumnWidth(1, 350); // timestamp
     for (int i = 0;i < pColNum; i++ ){
+
         ui->tableWidget->setColumnWidth(i+2, 100);
     }
 
@@ -3852,13 +4227,13 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
     item0->setTextAlignment(Qt::AlignCenter);
     ui->tableWidget->setItem(0,0,item0);
     item0->setBackground(Qt::lightGray);
-    item0->setFont(resFont);
+    item0->setFont(itemfont);
 
     QTableWidgetItem *itemStamp = new QTableWidgetItem( "时间戳" );
     itemStamp->setTextAlignment(Qt::AlignCenter);
     ui->tableWidget->setItem(0,1,itemStamp);
     itemStamp->setBackground(Qt::darkGray);
-    itemStamp->setFont(resFont);
+    itemStamp->setFont(itemfont);
 
 
 
@@ -3880,37 +4255,37 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
         itemFactorName->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget->setItem(0,2+i*5,itemFactorName);
         itemFactorName->setBackground(Qt::darkYellow);
-        itemFactorName->setFont(resFont);
+        itemFactorName->setFont(itemfont);
 
         QTableWidgetItem * itemMax = new QTableWidgetItem( "最大值" );
         itemMax->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget->setItem(1,2+i*5,itemMax);
         itemMax->setBackground(Qt::red);
-        itemMax->setFont(resFont);
+        itemMax->setFont(itemfont);
 
         QTableWidgetItem * itemMin = new QTableWidgetItem( "最小值" );
         itemMin->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget->setItem(1,3+i*5,itemMin);
         itemMin->setBackground(Qt::yellow);
-        itemMin->setFont(resFont);
+        itemMin->setFont(itemfont);
 
         QTableWidgetItem * itemAvg = new QTableWidgetItem( "平均值" );
         itemAvg->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget->setItem(1,4+i*5,itemAvg);
         itemAvg->setBackground(Qt::cyan);
-        itemAvg->setFont(resFont);
+        itemAvg->setFont(itemfont);
 
         QTableWidgetItem * itemSum = new QTableWidgetItem( "累计值" );
         itemSum->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget->setItem(1,5+i*5,itemSum);
         itemSum->setBackground(Qt::darkCyan);
-        itemSum->setFont(resFont);
+        itemSum->setFont(itemfont);
 
         QTableWidgetItem * itemFlag = new QTableWidgetItem( "数据标记" );
         itemFlag->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget->setItem(1,6+i*5,itemFlag);
         itemFlag->setBackground(Qt::magenta);
-        itemFlag->setFont(resFont);
+        itemFlag->setFont(itemfont);
     }
 
     int pRow = 2;
@@ -3921,10 +4296,12 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
         // 序号
         item = new QTableWidgetItem( QString::number(pRow-1) ); //fixme:  ======>>next page???
         item->setTextAlignment(Qt::AlignCenter);
+        item->setFont(itemfont);
         ui->tableWidget->setItem(pRow,0,item);
         //采集时间
         item = new QTableWidgetItem( i.key() );
         item->setTextAlignment(Qt::AlignCenter);
+        item->setFont(itemfont);
         ui->tableWidget->setItem(pRow,1,item);
 
         mapStrString pStrString = i.value();
@@ -3939,31 +4316,31 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
                     if(pDataList[0] == "") pDataList[0] = "-";
                     item = new QTableWidgetItem( pDataList[0] );
                     item->setTextAlignment(Qt::AlignCenter);
-                    item->setFont(resFont);
+                    item->setFont(itemfont);
                     ui->tableWidget->setItem(pRow,2+j*5,item);
 
                     if(pDataList[1] == "") pDataList[1] = "-";
                     item = new QTableWidgetItem( pDataList[1] );
                     item->setTextAlignment(Qt::AlignCenter);
-                    item->setFont(resFont);
+                    item->setFont(itemfont);
                     ui->tableWidget->setItem(pRow,3+j*5,item);
 
                     if(pDataList[2] == "") pDataList[2] = "-";
                     item = new QTableWidgetItem( pDataList[2] );
                     item->setTextAlignment(Qt::AlignCenter);
-                    item->setFont(resFont);
+                    item->setFont(itemfont);
                     ui->tableWidget->setItem(pRow,4+j*5,item);
 
                     if(pDataList[3] == "") pDataList[3] = "-";
                     item = new QTableWidgetItem( pDataList[3] );
                     item->setTextAlignment(Qt::AlignCenter);
-                    item->setFont(resFont);
+                    item->setFont(itemfont);
                     ui->tableWidget->setItem(pRow,5+j*5,item);
 
                     if(pDataList[4] == "") pDataList[4] = "-";
                     item = new QTableWidgetItem( pDataList[4] );
                     item->setTextAlignment(Qt::AlignCenter);
-                    item->setFont(resFont);
+                    item->setFont(itemfont);
                     ui->tableWidget->setItem(pRow,6+j*5,item);
                 }
             }
@@ -3971,27 +4348,27 @@ void MainWindow::setHisTableContents(QJsonArray &history_real_time_data)
             {
                 item = new QTableWidgetItem( "-" );
                 item->setTextAlignment(Qt::AlignCenter);
-                item->setFont(resFont);
+                item->setFont(itemfont);
                 ui->tableWidget->setItem(pRow,2+j*5,item);
 
                 item = new QTableWidgetItem( "-" );
                 item->setTextAlignment(Qt::AlignCenter);
-                item->setFont(resFont);
+                item->setFont(itemfont);
                 ui->tableWidget->setItem(pRow,3+j*5,item);
 
                 item = new QTableWidgetItem( "-" );
                 item->setTextAlignment(Qt::AlignCenter);
-                item->setFont(resFont);
+                item->setFont(itemfont);
                 ui->tableWidget->setItem(pRow,4+j*5,item);
 
                 item = new QTableWidgetItem( "-" );
                 item->setTextAlignment(Qt::AlignCenter);
-                item->setFont(resFont);
+                item->setFont(itemfont);
                 ui->tableWidget->setItem(pRow,5+j*5,item);
 
                 item = new QTableWidgetItem( "-" );
                 item->setTextAlignment(Qt::AlignCenter);
-                item->setFont(resFont);
+                item->setFont(itemfont);
                 ui->tableWidget->setItem(pRow,6+j*5,item);
             }
         }
@@ -4100,22 +4477,41 @@ ui->tableWidget->setColumnCount(cnt);
 // ui->tableWidget->setRowCount(10);
 ui->tableWidget->setHorizontalHeaderLabels(headerText);
 ui->tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers); //禁止编辑
-ui->tableWidget->horizontalHeader()->setStretchLastSection(true); //行头自适应表格
+//ui->tableWidget->horizontalHeader()->setStretchLastSection(true); //行头自适应表格
 
 ui->tableWidget->horizontalHeader()->setFont(QFont(QLatin1String("song"), 16));
 ui->tableWidget->horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
 QFont font =  ui->tableWidget->horizontalHeader()->font();
 
 ui->tableWidget->setFont(QFont(QLatin1String("song"), 16)); // 表格内容的字体为10号宋体
-
-int widths[] = {50,200,120,200,600};                  //1080
+ui->tableWidget->setTextElideMode(Qt::ElideNone);
+int widths[] = {50,400,120,300,800};                  //1080
 for (int i = 0;i < cnt; i++ ){ //列编号从0开始
     ui->tableWidget->setColumnWidth(i, widths[i]);
 }
 
+for (int i = 1;i < ui->tableWidget->rowCount(); i++ ){ //列编号从0开始
+
+    ui->tableWidget->setRowHeight(i,120);
+}
+
+//ui->tableWidget->resizeRowToContents(4);
+
 ui->tableWidget->setStyleSheet(qssTV);
 ui->tableWidget->horizontalHeader()->setVisible(true);
-ui->tableWidget->verticalHeader()->setDefaultSectionSize(45);
+//ui->tableWidget->verticalHeader()->setDefaultSectionSize(45);
+ui->tableWidget->setWordWrap(true);
+
+QScrollBar *vscollbar = new QScrollBar(Qt::Vertical,ui->tableWidget);
+vscollbar->setStyleSheet("QScrollBar:vertical { width: 30px; }");
+ui->tableWidget->setVerticalScrollBar(vscollbar);
+
+QScrollBar *hscollbar = new QScrollBar(Qt::Horizontal,ui->tableWidget);
+hscollbar->setStyleSheet("QScrollBar:horizontal { width: 30px; }");
+ui->tableWidget->setHorizontalScrollBar(hscollbar);
+
+ui->tableWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+
 }
 
 void MainWindow::setMsgTableContents(QJsonArray &history_real_time_data)
@@ -4124,17 +4520,19 @@ void MainWindow::setMsgTableContents(QJsonArray &history_real_time_data)
     usleep(200000);
     ui->progressBar->hide();
 
+
+
     if(m_CurPage == 0) ui->pushButtonLast->setEnabled(false);
     else ui->pushButtonLast->setEnabled(true);
     if(m_CurPage+1 == m_TotalPage) ui->pushButtonNext->setEnabled(false);
     else ui->pushButtonNext->setEnabled(true);
 
-    ui->textEditCurPage->setText("当前：第" + QString::number(m_CurPage+1) + "页");
+//    ui->textEditCurPage->setText("当前：第" + QString::number(m_CurPage+1) + "页");
     ui->textEditCurPage->setAlignment(Qt::AlignCenter);
     ui->textEditToPage->setAlignment(Qt::AlignCenter);
     ui->textEditAllPage->setText("共：" + QString::number(m_TotalPage) + "页");
     ui->textEditAllPage->setAlignment(Qt::AlignCenter);
-
+    ui->tableWidget->verticalHeader()->setDefaultSectionSize(120);
     ui->tableWidget->verticalHeader()->setVisible(false);//表头不可见
     ui->tableWidget->clearContents(); //只清除工作区，不清除表头
     if(history_real_time_data.isEmpty())
@@ -4162,28 +4560,43 @@ void MainWindow::setMsgTableContents(QJsonArray &history_real_time_data)
         // 序号
         item = new QTableWidgetItem( QString::number(i+1,10) );
         item->setTextAlignment(Qt::AlignCenter);
+        item->setFont(itemfont);
         ui->tableWidget->setItem(i,0,item);
 
         //因子名称
         item = new QTableWidgetItem( json[QLatin1String("timestamp")].toString() );
         item->setTextAlignment(Qt::AlignCenter);
+        item->setFont(itemfont);
         ui->tableWidget->setItem(i,1,item);
 
         //实时值
         item = new QTableWidgetItem( "--->" );
         item->setTextAlignment(Qt::AlignCenter);
+        item->setFont(itemfont);
         ui->tableWidget->setItem(i,2,item);
 
         //数据标识
         item = new QTableWidgetItem( json[QLatin1String("target_addr")].toString() );
         item->setTextAlignment(Qt::AlignCenter);
+        item->setFont(itemfont);
         ui->tableWidget->setItem(i,3,item);
 
         //数据 content  fixme: ... yingwenzimu zidonghuanhang
-        item = new QTableWidgetItem( json[QLatin1String("message")].toString() );
-        item->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget->setItem(i,4,item);
+        QLabel *l1 = new QLabel();
+        l1->setWordWrap(true);
+        l1->setFont(itemfont);
+        l1->setAlignment(Qt::AlignVCenter);
+
+        l1->setText(json[QLatin1String("message")].toString());
+        l1->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Preferred);
+        ui->tableWidget->setCellWidget(i,4,l1);
+//        item = new QTableWidgetItem( json[QLatin1String("message")].toString() );
+//        item->setTextAlignment(Qt::AlignCenter);
+//        item->setFont(itemfont);
+//        item->setToolTip(item->text());
+//        ui->tableWidget->setItem(i,4,item);
     }
+
 }
 
 
